@@ -2,70 +2,47 @@
 croston model for intermittent time series
 """
 
-import numpy
-import pandas
+import numpy as np
+import pandas as pd
 from scipy.optimize import minimize
 
 def fit_croston(
-                    data_name,
-                    model_time_series_required_length,
                     input_endog,
-                    input_dates,
-                    input_length,
                     forecast_length,
-                    time_grain,
-                    input_endog_shifted,
-                    forecast_shifted_response,
-                    error_logger,
-                    training_length_in_years,
-                    time_series_class,
-                    holidays,
-                    training_exog_var,
-                    forecast_exog_var
+                    croston_variant = 'original'
                 ):
         """
 
-        :param data_name:
-        :param model_time_series_required_length:
-        :param input_endog:
-        :param input_dates:
-        :param input_length:
-        :param forecast_length:
-        :param time_grain:
-        :param input_endog_shifted:
-        :param forecast_shifted_response:
-        :param error_logger:
-        :param training_length_in_years:
-        :param time_series_class:
-        :param holidays:
-        :param training_exog_var:
-        :param forecast_exog_var:
-        :return:
+        :param input_endog: numpy array of intermittent demand time series
+        :param forecast_length: forecast horizon
+        :param croston_variant: croston model type
+        :return: dictionary of model parameters, in-sample forecast, and out-of-sample forecast
         """
-        model = 'croston'
-        epsilon = 1e-7
-        input_series = numpy.asarray(input_endog.values)
-        nzd = numpy.where(input_series != 0)[0]
         
-        if time_series_class == 'intermittent' and training_length_in_years > model_time_series_required_length.get(model, 0.5) and list(nzd) != [0]:
+        input_series = np.asarray(input_endog)
+        epsilon = 1e-7
+        input_length = len(input_series)
+        nzd = np.where(input_series != 0)[0]
+        
+        if list(nzd) != [0]:
                 
                 try:
                     w_opt = _croston_opt(
-                                            input_series = numpy.asarray(input_endog.values),
+                                            input_series = input_series,
                                             input_series_length = input_length,
+                                            croston_variant = croston_variant,
                                             epsilon = epsilon,                                            
                                             w = None,
-                                            nop = 1,
-                                            croston_variant = 'original'
+                                            nop = 1
                                         )
                     
                     croston_training_result = _croston(
-                                                            input_series = numpy.asarray(input_endog.values), 
+                                                            input_series = input_series, 
                                                             input_series_length = input_length,
+                                                            croston_variant = croston_variant,
                                                             w = w_opt, 
                                                             h = forecast_length,
                                                             epsilon = epsilon,
-                                                            croston_variant = 'original'
                                                       )
                     croston_model = croston_training_result['model']
                     croston_fittedvalues = croston_training_result['in_sample_forecast']
@@ -77,7 +54,7 @@ def fit_croston(
                     croston_model = None
                     croston_fittedvalues = None
                     croston_forecast = None
-                    error_logger.error('error in model fit for ' + model + ' ' + ' '.join(data_name) + ' with error ' + str(e))
+                    print(str(e))
         
         else:
             
@@ -86,40 +63,35 @@ def fit_croston(
             croston_forecast = None        
         
         
-        return croston_model, croston_fittedvalues, croston_forecast
+        return {
+                    'croston_model':            croston_model,
+                    'croston_fittedvalues':     croston_fittedvalues,
+                    'croston_forecast':         croston_forecast
+                }
 
 def _croston(
                  input_series, 
                  input_series_length,
+                 croston_variant,
                  w, 
                  h,                  
-                 epsilon,
-                 croston_variant = 'original'
+                 epsilon
              ):
-    """
-
-    :param input_series:
-    :param input_series_length:
-    :param w:
-    :param h:
-    :param epsilon:
-    :param croston_variant:
-    :return:
-    """
+    
     # Croston decomposition
-    nzd = numpy.where(input_series != 0)[0] # find location of non-zero demand
+    nzd = np.where(input_series != 0)[0] # find location of non-zero demand
     
     k = len(nzd)
     z = input_series[nzd] # demand
     
-    x = numpy.concatenate([[nzd[0]], numpy.diff(nzd)]) # intervals
+    x = np.concatenate([[nzd[0]], np.diff(nzd)]) # intervals
 
     # initialize
     
-    init = [z[0], numpy.mean(x)]
+    init = [z[0], np.mean(x)]
     
-    zfit = numpy.array([None] * k)
-    xfit = numpy.array([None] * k)
+    zfit = np.array([None] * k)
+    xfit = np.array([None] * k)
 
     # assign initial values and prameters
     
@@ -159,16 +131,16 @@ def _croston(
     croston_model = {
                         'a_demand':             a_demand,
                         'a_interval':           a_interval,
-                        'demand_series':        pandas.Series(zfit),
-                        'interval_series':      pandas.Series(xfit),
-                        'demand_process':       pandas.Series(cc),
+                        'demand_series':        pd.Series(zfit),
+                        'interval_series':      pd.Series(xfit),
+                        'demand_process':       pd.Series(cc),
                         'correction_factor':    correction_factor
                     }
     
     # calculate in-sample demand rate
     
-    frc_in = numpy.zeros(input_series_length)
-    tv = numpy.concatenate([nzd, [input_series_length]]) # Time vector used to create frc_in forecasts
+    frc_in = np.zeros(input_series_length)
+    tv = np.concatenate([nzd, [input_series_length]]) # Time vector used to create frc_in forecasts
     
     for i in range(k):
         frc_in[tv[i]:min(tv[i+1], input_series_length)] = cc[i]
@@ -176,15 +148,15 @@ def _croston(
     # forecast out_of_sample demand rate
     
     if h > 0:
-        frc_out = numpy.array([cc[k-1]] * h)
+        frc_out = np.array([cc[k-1]] * h)
         
     else:
         frc_out = None
     
     return_dictionary = {
                             'model':                    croston_model,
-                            'in_sample_forecast':       pandas.Series(frc_in),
-                            'out_of_sample_forecast':   pandas.Series(frc_out)
+                            'in_sample_forecast':       frc_in,
+                            'out_of_sample_forecast':   frc_out
                         }
     
     return return_dictionary
@@ -192,31 +164,22 @@ def _croston(
 def _croston_opt(
                     input_series, 
                     input_series_length, 
+                    croston_variant,
                     epsilon,
                     w = None,
-                    nop = 1,
-                    croston_variant = 'original'
+                    nop = 1
                 ):
-    """
-
-    :param input_series:
-    :param input_series_length:
-    :param epsilon:
-    :param w:
-    :param nop:
-    :param croston_variant:
-    :return:
-    """
-    p0 = numpy.array([0.1] * nop)
+    
+    p0 = np.array([0.1] * nop)
             
     wopt = minimize(
                         fun = _croston_cost, 
                         x0 = p0, 
                         method='Nelder-Mead',
-                        args=(input_series, input_series_length, epsilon, croston_variant)
+                        args=(input_series, input_series_length, croston_variant, epsilon)
                     )
     
-    constrained_wopt = numpy.minimum([1], numpy.maximum([0], wopt.x))   
+    constrained_wopt = np.minimum([1], np.maximum([0], wopt.x))   
     
     return constrained_wopt
     
@@ -225,24 +188,23 @@ def _croston_cost(
                     p0,
                     input_series,
                     input_series_length,
-                    epsilon,
-                    croston_variant
+                    croston_variant,
+                    epsilon
                 ):
-    """
-
-    :param p0:
-    :param input_series:
-    :param input_series_length:
-    :param epsilon:
-    :param croston_variant:
-    :return:
-    """
+    
     # cost function for croston and variants
     
-    frc_in = _croston(input_series = input_series, input_series_length = input_series_length, w=p0, h=0, epsilon = epsilon, croston_variant = croston_variant)['in_sample_forecast']
+    frc_in = _croston(
+                            input_series = input_series,
+                            input_series_length = input_series_length,
+                            croston_variant = croston_variant,
+                            w=p0,
+                            h=0,
+                            epsilon = epsilon
+                        )['in_sample_forecast']
         
     E = input_series - frc_in
-    E = E[E != numpy.array(None)]
-    E = numpy.mean(E ** 2)
+    E = E[E != np.array(None)]
+    E = np.mean(E ** 2)
 
     return E

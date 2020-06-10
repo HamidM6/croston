@@ -7,13 +7,13 @@ requirements = ["numpy", "pandas", "scipy"]
 
 setup(
     name="croston",
-    version="0.0.1",
-    author="abc",
-    author_email="abc@gmail.com",
+    version="0.1.2.3",
+    author="Hamid Mohammadi",
+    author_email="hmohammadi6545@gmail.com",
     description="croston model for intermittent time series",
     long_description=readme,
     long_description_content_type="text/markdown",
-    url="https://github.com/croston/homepage/",
+    url="https://github.com/newelldatascience/croston",
     packages=find_packages(),
     install_requires=requirements,
     classifiers=[
