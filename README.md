@@ -1,7 +1,7 @@
 # croston
 A python package to forecast intermittent time series using croston's method
 
-[readthedocs: croston](https://newell-brands-croston.readthedocs-hosted.com/en/latest/)
+[readthedocs: croston](https://croston.readthedocs.io/en/latest/)
 
 example:
 ```
